@@ -13,9 +13,9 @@ from data_processor import glue_processors as processors
 from data_processor import glue_output_modes as output_modes
 import os
 import logging
-from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
-                              TensorDataset)
+from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler, TensorDataset)
 from transformers import glue_convert_examples_to_features as convert_examples_to_features
+import sys
 
 
 logger = logging.getLogger(__name__)
@@ -26,8 +26,6 @@ def set_seed(args):
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    if args.n_gpu > 0:
-        torch.cuda.manual_seed_all(args.seed)
 
 def load_and_cache_examples(args, task, tokenizer, mode="train"):
 
@@ -37,9 +35,8 @@ def load_and_cache_examples(args, task, tokenizer, mode="train"):
     train_stage = mode
     if mode == "eval":
         train_stage = "dev"
-    cached_features_file = os.path.join(args.data_dir, 'cached_{}_{}_{}_{}'.format(
+    cached_features_file = os.path.join(args.data_dir, 'cached_{}_{}_{}'.format(
         train_stage,
-        list(filter(None, args.model_name_or_path.split('/'))).pop(),
         str(args.max_seq_length),
         str(task)))
     if os.path.exists(cached_features_file) and not args.overwrite_cache:
@@ -62,14 +59,13 @@ def load_and_cache_examples(args, task, tokenizer, mode="train"):
                                                 label_list=label_list,
                                                 max_length=args.max_seq_length,
                                                 output_mode=output_mode,
-                                                pad_on_left=bool(args.model_type in ['xlnet']),
+                                                # pad_on_left=bool(args.model_type in ['xlnet']),
                                                 # pad on the left for xlnet
-                                                pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
-                                                pad_token_segment_id=4 if args.model_type in ['xlnet'] else 0,
+                                                # pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
+                                                # pad_token_segment_id=4 if args.model_type in ['xlnet'] else 0,
                                                 )
-        if args.local_rank in [-1, 0]:
-            logger.info("Saving features into cached file %s", cached_features_file)
-            torch.save(features, cached_features_file)
+        logger.info("Saving features into cached file %s", cached_features_file)
+        torch.save(features, cached_features_file)
 
     # Convert to Tensors and build dataset
     all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
@@ -80,7 +76,8 @@ def load_and_cache_examples(args, task, tokenizer, mode="train"):
     elif output_mode == "regression":
         all_labels = torch.tensor([f.label for f in features], dtype=torch.float)
 
-    dataset = TensorDataset(all_input_ids, all_attention_mask, all_token_type_ids, all_labels)
+    dataset = DictDataset(all_input_ids, all_attention_mask, all_labels)
+    #dataset = TensorDataset(all_input_ids, all_attention_mask, all_token_type_ids, all_labels)
     return dataset
 
 
@@ -99,16 +96,11 @@ class DictDataset(Dataset):
     def __len__(self):
         return self.all_input_ids.size(0)
 
-
-
-
-
-
 def simple_adaptor(batch, model_outputs):
     # The second element of model_outputs is the logits before softmax
     # The third element of model_outputs is hidden states
-    return {'logits': model_outputs[1],
-            'hidden': model_outputs[2],
+    return {'logits': model_outputs[0],
+            'hidden': model_outputs[1],
             'inputs_mask': batch['attention_mask']}
 
 
@@ -147,20 +139,25 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--no_cuda", action='store_true',
                         help="Avoid using CUDA when available")
-    parser.add_argument("--data_dir", default=None, type=str, required=True,
+    parser.add_argument("--data_dir", default="data/sst2", type=str, 
                         help="The input data dir. Should contain the .tsv files (or other data files) for the task.")
-    parser.add_argument("--student_config", default="'bert_config/bert_config_T3.json'", type=str, required=True,
+    parser.add_argument("--student_config", default="bert_config/bert_config_T3.json", type=str, 
                         help="the json file of student model config")
-    parser.add_argument("--teacher_pretrained_path", default="''", type=str, required=True,
+    parser.add_argument("--teacher_pretrained_path", default="/home/machunping/fine_tuned_bert_sst2", type=str,
                         help="the path of teacher pretrained model")
     parser.add_argument('--seed', type=int, default=42,
                         help="random seed for initialization")
-    parser.add_argument('--num_epochs', type=int, default=10,
+    parser.add_argument('--num_epochs', type=int, default=1,
                         help="training epochs")
-    parser.add_argument('--batch_size', type=int, default=32,
+    parser.add_argument('--batch_size', type=int, default=16,
                         help="batch_size")
-    parser.add_argument("--task_name", default="sst-2", type=str, required=True,
+    parser.add_argument('--max_seq_length', type=int, default=64,
+                        help="")
+    parser.add_argument("--task_name", default="sst-2", type=str, 
                         help="The name of the task to train selected in the list: " + ", ".join(processors.keys()))
+    parser.add_argument("--model_type", default='bert', type=str, help="")
+    parser.add_argument('--overwrite_cache', action='store_true',
+                                        help="Overwrite the cached training and evaluation sets")
     args = parser.parse_args()
 
     # device
@@ -169,6 +166,8 @@ def main():
 
     bert_config_T3 = BertConfig.from_json_file(args.student_config)
     bert_config_T3.output_hidden_states = True
+
+    print("teacher model loading")
 
     teacher_model = BertForSequenceClassification.from_pretrained(args.teacher_pretrained_path)
 
@@ -186,10 +185,11 @@ def main():
     label_list = processor.get_labels()
 
     tokenizer = BertTokenizer.from_pretrained(args.teacher_pretrained_path)
+    print("loading data")
     train_dataset = load_and_cache_examples(args, args.task_name, tokenizer, mode='train')
     dev_dataset = load_and_cache_examples(args, args.task_name, tokenizer, mode='eval')
     test_dataset = load_and_cache_examples(args, args.task_name, tokenizer, mode='test')
-    train_dataloader = DataLoader()
+    train_dataloader = DataLoader(train_dataset)
     num_epochs = args.num_epochs
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.batch_size)
@@ -255,11 +255,5 @@ def main():
     # testing
     predict(student_model,test_dataset,device)
 
-
-
-
-
-
-
-
-
+if __name__ == "__main__":
+    main()

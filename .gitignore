@@ -110,3 +110,5 @@ data_preprocess/
 .idea/
 runs/
 saved_model/
+data/
+saved_models/
