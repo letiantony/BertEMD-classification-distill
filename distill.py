@@ -154,7 +154,7 @@ def main():
     parser.add_argument('--max_seq_length', type=int, default=64,
                         help="")
     parser.add_argument("--task_name", default="sst-2", type=str, 
-                        help="The name of the task to train selected in the list: " + ", ".join(processors.keys()))
+                        help="")
     parser.add_argument("--model_type", default='bert', type=str, help="")
     parser.add_argument('--overwrite_cache', action='store_true',
                                         help="Overwrite the cached training and evaluation sets")
@@ -170,7 +170,6 @@ def main():
     print("teacher model loading")
 
     teacher_model = BertForSequenceClassification.from_pretrained(args.teacher_pretrained_path)
-
     student_model = BertForSequenceClassification(bert_config_T3)  # , num_labels = 2
 
     teacher_model.to(device=device)
@@ -189,7 +188,6 @@ def main():
     train_dataset = load_and_cache_examples(args, args.task_name, tokenizer, mode='train')
     dev_dataset = load_and_cache_examples(args, args.task_name, tokenizer, mode='eval')
     test_dataset = load_and_cache_examples(args, args.task_name, tokenizer, mode='test')
-    train_dataloader = DataLoader(train_dataset)
     num_epochs = args.num_epochs
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.batch_size)
