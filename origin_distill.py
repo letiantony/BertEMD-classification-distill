@@ -103,6 +103,7 @@ if __name__ == "__main__":
     bert_config_T3.output_hidden_states = True
 
     teacher_model = BertForSequenceClassification(bert_config)  # , num_labels = 2
+    teacher_model.from_pretrained(args.teacher_pretrained_path)
     # Teacher should be initialized with pre-trained weights and fine-tuned on the downstream task.
     # For the demonstration purpose, we omit these steps here
 
@@ -120,6 +121,8 @@ if __name__ == "__main__":
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.batch_size)
     eval_dataset = load_and_cache_examples(args, args.task_name, tokenizer, mode='eval')
+    test_dataset = load_and_cache_examples(args, args.task_name, tokenizer, mode='test')
+
 
 
 
@@ -185,3 +188,5 @@ if __name__ == "__main__":
             scheduler_class=scheduler_class,
             scheduler_args=scheduler_args,
             callback=callback_fun)
+    # testing
+    predict(student_model, test_dataset, device)
