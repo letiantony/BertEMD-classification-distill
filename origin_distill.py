@@ -96,20 +96,19 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
 
     # Define models
-    # bert_config = BertConfig.from_json_file('bert_config/bert_config.json')
+    bert_config = BertConfig.from_json_file(args.teacher_pretrained_path)
     bert_config_T3 = BertConfig.from_json_file('bert_config/bert_config_T3.json')
 
-    # bert_config.output_hidden_states = True
+    bert_config.output_hidden_states = True
     bert_config_T3.output_hidden_states = True
 
-    # teacher_model = BertForSequenceClassification(bert_config)  # , num_labels = 2
+    teacher_model = BertForSequenceClassification(bert_config)  # , num_labels = 2
     # Teacher should be initialized with pre-trained weights and fine-tuned on the downstream task.
     # For the demonstration purpose, we omit these steps here
 
-    student_model = BertForSequenceClassification(
-        bert_config_T3)  # , num_labels = 2
+    student_model = BertForSequenceClassification(bert_config_T3)  # , num_labels = 2
 
-    teacher_model = BertForSequenceClassification.from_pretrained(args.teacher_pretrained_path)
+    # teacher_model = BertForSequenceClassification.from_pretrained(args.teacher_pretrained_path)
     teacher_model.to(device=device)
     student_model.to(device=device)
 
@@ -186,5 +185,3 @@ if __name__ == "__main__":
             scheduler_class=scheduler_class,
             scheduler_args=scheduler_args,
             callback=callback_fun)
-
-
