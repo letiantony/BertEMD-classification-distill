@@ -14,28 +14,6 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 
 import sys
-# device
-device = torch.device('cuda')
-
-# Define models
-bert_config = BertConfig.from_json_file('bert_config/bert_config.json')
-bert_config_T3 = BertConfig.from_json_file('bert_config/bert_config_T3.json')
-
-bert_config.output_hidden_states = True
-bert_config_T3.output_hidden_states = True
-
-teacher_model = BertForSequenceClassification(bert_config)  # , num_labels = 2
-# Teacher should be initialized with pre-trained weights and fine-tuned on the downstream task.
-# For the demonstration purpose, we omit these steps here
-
-student_model = BertForSequenceClassification(
-    bert_config_T3)  # , num_labels = 2
-
-teacher_model.to(device=device)
-student_model.to(device=device)
-
-# Define Dict Dataset
-
 
 class DictDataset(Dataset):
     def __init__(self, all_input_ids, all_attention_mask, all_labels):
@@ -58,7 +36,6 @@ def simple_adaptor(batch, model_outputs):
     # print("\noutput_length:\n")
     # print(len(model_outputs))
     # print(model_outputs)
-    sys.exit()
     return {'logits': model_outputs[1],
             'hidden': model_outputs[2],
             'inputs_mask': batch['attention_mask']}
@@ -114,6 +91,29 @@ if __name__ == "__main__":
     parser.add_argument("--model_type", default='bert', type=str, help="")
     parser.add_argument('--overwrite_cache', action='store_true', help="Overwrite the cached training and evaluation sets")
     args = parser.parse_args()
+
+    # device
+    device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+
+    # Define models
+    # bert_config = BertConfig.from_json_file('bert_config/bert_config.json')
+    bert_config_T3 = BertConfig.from_json_file('bert_config/bert_config_T3.json')
+
+    # bert_config.output_hidden_states = True
+    bert_config_T3.output_hidden_states = True
+
+    # teacher_model = BertForSequenceClassification(bert_config)  # , num_labels = 2
+    # Teacher should be initialized with pre-trained weights and fine-tuned on the downstream task.
+    # For the demonstration purpose, we omit these steps here
+
+    student_model = BertForSequenceClassification(
+        bert_config_T3)  # , num_labels = 2
+
+    teacher_model = BertForSequenceClassification.from_pretrained(args.teacher_pretrained_path)
+    teacher_model.to(device=device)
+    student_model.to(device=device)
+
+    # Define Dict Dataset
 
     # Prepare random data
     tokenizer = BertTokenizer.from_pretrained(args.teacher_pretrained_path)
