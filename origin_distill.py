@@ -116,23 +116,16 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Prepare random data
-    all_input_ids = torch.randint(
-        low=0, high=100, size=(
-            10, 12))  # 100 examples of length 128
-    all_attention_mask = torch.ones_like(all_input_ids)
-    all_labels = torch.randint(low=0, high=2, size=(10,))
-    dataset = DictDataset(all_input_ids, all_attention_mask, all_labels)
-    eval_dataset = DictDataset(all_input_ids, all_attention_mask, all_labels)
-    dataloader = DataLoader(dataset, batch_size=2)
-
     tokenizer = BertTokenizer.from_pretrained(args.teacher_pretrained_path)
     train_dataset = load_and_cache_examples(args, args.task_name, tokenizer, mode='train')
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.batch_size)
+    eval_dataset = load_and_cache_examples(args, args.task_name, tokenizer, mode='eval')
+
 
 
     num_epochs = 1
-    num_training_steps = len(dataloader) * num_epochs
+    num_training_steps = len(train_dataloader) * num_epochs
     # Optimizer and learning rate scheduler
     optimizer = AdamW(student_model.parameters(), lr=1e-4)
 
@@ -152,10 +145,6 @@ if __name__ == "__main__":
     print("student_model's parametrers:")
     result, _ = textbrewer.utils.display_parameters(student_model, max_level=3)
     print(result)
-
-
-
-
 
     callback_fun = partial(
         predict,
@@ -192,7 +181,7 @@ if __name__ == "__main__":
     with distiller:
         distiller.train(
             optimizer,
-            dataloader,
+            train_dataloader,
             num_epochs=num_epochs,
             scheduler_class=scheduler_class,
             scheduler_args=scheduler_args,
