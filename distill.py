@@ -251,7 +251,8 @@ def main():
             callback=callback_fun)
 
     # testing
-    predict(student_model,test_dataset,device)
+    predict(model=student_model, eval_dataset=test_dataset, device=device)
 
 if __name__ == "__main__":
     main()
+
